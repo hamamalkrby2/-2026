@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default-deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Path ID Verifier
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string 
+        && data.username is string && data.username.size() <= 128
+        && data.email is string && data.email.size() <= 256
+        && data.favoriteTeamId is string && data.favoriteTeamId.size() <= 32
+        && data.favoriteTeamName is string && data.favoriteTeamName.size() <= 128
+        && data.avatar is string && data.avatar.size() <= 64
+        && data.xp is int
+        && data.badge is string && data.badge.size() <= 128
+        && data.isPremium is bool
+        && data.joinedAt is string && data.joinedAt.size() <= 64;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && isValidUserProfile(request.resource.data) && isValidId(userId);
+      allow update: if isSignedIn() && isOwner(userId) && isValidUserProfile(request.resource.data) && isValidId(userId);
+      allow delete: if false;
+    }
+  }
+}

@@ -65,7 +65,7 @@ export default function UserAuth({ currentUser, onUserUpdate, onNavigateToSuppor
   const [didCorrectTrivia, setDidCorrectTrivia] = useState(false);
   const [lastTriviaDay, setLastTriviaDay] = useState<string | null>(null);
 
-  // Load profile on mount
+  // Load profile on mount with automatic login for instant entry
   useEffect(() => {
     const savedUser = localStorage.getItem("worldcup_user_profile");
     if (savedUser) {
@@ -75,6 +75,37 @@ export default function UserAuth({ currentUser, onUserUpdate, onNavigateToSuppor
         onUserUpdate(parsed);
       } catch (err) {
         console.error("Failed to parse user profile: ", err);
+      }
+    } else {
+      // Direct automatic login on first arrival to prevent setup or entry barriers
+      const defaultProfile: UserProfile = {
+        username: "مشجع المونديال الرائد",
+        email: "fan@worldcup2026.com",
+        favoriteTeamId: "bra",
+        favoriteTeamName: "🇧🇷 البرازيل",
+        avatar: "👑",
+        xp: 250,
+        badge: "محلل ذهبي",
+        isPremium: false, // Start as standard, making the Stripe Premium upgrade feature highly visible and ready to be explored!
+        joinedAt: new Date().toLocaleDateString("ar-SA")
+      };
+      
+      try {
+        localStorage.setItem("worldcup_user_profile", JSON.stringify(defaultProfile));
+        
+        // Also register in simulated database
+        const localUsersStr = localStorage.getItem("worldcup_registered_users") || "[]";
+        let usersList: UserProfile[] = [];
+        try { usersList = JSON.parse(localUsersStr); } catch (e) {}
+        if (!usersList.some((u) => u.username === defaultProfile.username)) {
+          usersList.push(defaultProfile);
+          localStorage.setItem("worldcup_registered_users", JSON.stringify(usersList));
+        }
+        
+        setProfile(defaultProfile);
+        onUserUpdate(defaultProfile);
+      } catch (err) {
+        console.error("Could not write automatic user profile:", err);
       }
     }
     const savedTriviaDay = localStorage.getItem("worldcup_last_trivia_day");

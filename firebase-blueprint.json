@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "UserProfile",
+      "description": "User profile in the application synced with Firebase Auth",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "favoriteTeamId": { "type": "string" },
+        "favoriteTeamName": { "type": "string" },
+        "avatar": { "type": "string" },
+        "xp": { "type": "number" },
+        "badge": { "type": "string" },
+        "isPremium": { "type": "boolean" },
+        "joinedAt": { "type": "string" }
+      },
+      "required": ["userId", "username", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "Stores user profile data indexed by Firebase Auth UID"
+    }
+  }
+}

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Trophy, Calendar, Users, MapPin, Globe, Sparkles, Flame, ShieldAlert, History, Heart } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Trophy, Calendar, Users, MapPin, Globe, Sparkles, Flame, ShieldAlert, History, Heart, Layers } from "lucide-react";
 import TournamentGroups from "./components/TournamentGroups";
 import TeamsList from "./components/TeamsList";
 import StadiumsGuide from "./components/StadiumsGuide";
@@ -8,15 +8,166 @@ import AIAssistant from "./components/AIAssistant";
 import WorldCupHistory from "./components/WorldCupHistory";
 import UserAuth from "./components/UserAuth";
 import AppSupportHub from "./components/AppSupportHub";
+import WorkspaceHub from "./components/WorkspaceHub";
 import { UserProfile } from "./types";
 import { FUN_FACTS } from "./data/worldCupData";
 
-type TabType = "dashboard" | "simulator" | "ai" | "stadiums" | "teams" | "history" | "support";
+type TabType = "dashboard" | "simulator" | "ai" | "stadiums" | "teams" | "history" | "support" | "workspace";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [stripeActive, setStripeActive] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState<string | null>(null);
+  const [stripeStatusMsg, setStripeStatusMsg] = useState("");
 
+  // Detect Stripe configuration on mount
+  useEffect(() => {
+    fetch("/api/stripe/config")
+      .then((res) => res.json())
+      .then((data) => {
+        setStripeActive(!!data.stripeActive);
+      })
+      .catch((err) => {
+        console.warn("Could not retrieve Stripe configuration:", err);
+      });
+  }, []);
+
+  // Monitor url queries for successful checkout redirects
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get("payment");
+    if (paymentStatus === "success") {
+      const planId = params.get("planId") || "pledge";
+      const amount = parseFloat(params.get("amount") || "0");
+      const session_id = params.get("session_id");
+
+      const processedSessions = JSON.parse(localStorage.getItem("worldcup_processed_stripe_sessions") || "[]");
+      if (!session_id || !processedSessions.includes(session_id)) {
+        if (session_id) {
+          processedSessions.push(session_id);
+          localStorage.setItem("worldcup_processed_stripe_sessions", JSON.stringify(processedSessions));
+        }
+
+        const localUserStr = localStorage.getItem("worldcup_user_profile");
+        let activeUser = currentUser;
+        if (!activeUser && localUserStr) {
+          try { activeUser = JSON.parse(localUserStr); } catch (e) {}
+        }
+
+        if (activeUser) {
+          const updatedUser: UserProfile = {
+            ...activeUser,
+            isPremium: true,
+            xp: activeUser.xp + 250,
+            badge: "مستشار المونديال الأسطوري"
+          };
+          setCurrentUser(updatedUser);
+          localStorage.setItem("worldcup_user_profile", JSON.stringify(updatedUser));
+
+          // Sync in registered list database
+          const localUsersStr = localStorage.getItem("worldcup_registered_users") || "[]";
+          let usersList = [];
+          try { usersList = JSON.parse(localUsersStr); } catch (e) {}
+          if (Array.isArray(usersList)) {
+            usersList = usersList.map((u: any) => u.username === activeUser!.username ? updatedUser : u);
+            localStorage.setItem("worldcup_registered_users", JSON.stringify(usersList));
+          }
+        }
+
+        setStripeStatusMsg(`🏆 رائع! تم تأكيد عمليتك عبر Stripe وتفعيل العضوية الذهبية الفاخرة لحسابك فوراً بنجاح! 👑✨`);
+        setTimeout(() => setStripeStatusMsg(""), 9000);
+      }
+
+      // Cleanup
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    } else if (paymentStatus === "cancel") {
+      setStripeStatusMsg(`⚠️ تم إلغاء عملية الاشتراك والعودة بأمان للوحة التحكم.`);
+      setTimeout(() => setStripeStatusMsg(""), 6000);
+
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, [currentUser]);
+
+  // Handle direct Stripe Checkout creation from Dashboard
+  const handleStripeUpgrade = (planId: "monthly" | "yearly") => {
+    if (stripeLoading) return;
+    setStripeLoading(planId);
+    setStripeStatusMsg("");
+
+    fetch("/api/stripe/create-checkout-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        planId: planId,
+        amount: planId === "yearly" ? 79.99 : 9.99,
+        username: currentUser ? currentUser.username : "عضو فخري"
+      })
+    })
+    .then((res) => res.json())
+    .then((data) => {
+      setStripeLoading(null);
+      if (data.url) {
+        // Redirect to safe Stripe Secure payment gateway
+        window.location.href = data.url;
+      } else if (data.simulation) {
+        // Instantly upgrade active session (Stripe simulator mode)
+        const localUserStr = localStorage.getItem("worldcup_user_profile");
+        let activeUser = currentUser;
+        if (!activeUser && localUserStr) {
+          try { activeUser = JSON.parse(localUserStr); } catch (e) {}
+        }
+
+        const defaultUser: UserProfile = activeUser || {
+          username: "مشجع المونديال الرائد",
+          email: "fan@worldcup2026.com",
+          favoriteTeamId: "bra",
+          favoriteTeamName: "🇧🇷 البرازيل",
+          avatar: "👑",
+          xp: 250,
+          badge: "محلل ذهبي",
+          isPremium: false,
+          joinedAt: new Date().toLocaleDateString("ar-SA")
+        };
+
+        const updatedUser: UserProfile = {
+          ...defaultUser,
+          isPremium: true,
+          xp: defaultUser.xp + 250,
+          badge: "مستشار المونديال الأسطوري"
+        };
+
+        setCurrentUser(updatedUser);
+        localStorage.setItem("worldcup_user_profile", JSON.stringify(updatedUser));
+
+        const localUsersStr = localStorage.getItem("worldcup_registered_users") || "[]";
+        let usersList = [];
+        try { usersList = JSON.parse(localUsersStr); } catch (e) {}
+        if (Array.isArray(usersList)) {
+          if (!usersList.some((u: any) => u.username === updatedUser.username)) {
+            usersList.push(updatedUser);
+          } else {
+            usersList = usersList.map((u: any) => u.username === updatedUser.username ? updatedUser : u);
+          }
+          localStorage.setItem("worldcup_registered_users", JSON.stringify(usersList));
+        }
+
+        setStripeStatusMsg("🏆 تم تفعيل وضع المحاكاة الذكي بنجاح وترقية حسابك كلياً وتفعيل العضوية وتأثيرات التاج الذهبي! 👑🎉");
+        setTimeout(() => setStripeStatusMsg(""), 9000);
+      } else {
+        setStripeStatusMsg("خطأ: تعذر توليد رابط المعاملة الآمنة.");
+        setTimeout(() => setStripeStatusMsg(""), 6000);
+      }
+    })
+    .catch((err) => {
+      console.error("Stripe error on dashboard:", err);
+      setStripeLoading(null);
+      setStripeStatusMsg("خطأ: تعذر الاتصال ببوابة Stripe الدفعية.");
+      setTimeout(() => setStripeStatusMsg(""), 6000);
+    });
+  };
 
   // Custom paths for our generated final match image
   const finalMatchImagePath = "/src/assets/images/world_cup_final_banner_1779318269320.png";
@@ -92,10 +243,10 @@ export default function App() {
             
             <button
               onClick={() => setActiveTab("support")}
-              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer h-11 select-none ${
+              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-95 ${
                 activeTab === "support"
-                  ? "bg-rose-950/40 text-rose-400 border border-rose-500/35"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-rose-950/40 text-rose-400 border border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.18)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
               }`}
             >
               <span>دعم المونديال وتطويره 💖</span>
@@ -103,11 +254,23 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => setActiveTab("workspace")}
+              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-95 ${
+                activeTab === "workspace"
+                  ? "bg-blue-900 border border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.18)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
+              }`}
+            >
+              <span>مساحة العمل المتكاملة ☁️</span>
+              <Layers className="w-4.5 h-4.5 text-blue-400" />
+            </button>
+
+            <button
               onClick={() => setActiveTab("history")}
-              className={`px-4 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer h-11 select-none ${
+              className={`px-4 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-95 ${
                 activeTab === "history"
-                  ? "bg-slate-900 text-amber-400 border border-amber-500/30"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-amber-400 border border-amber-500/45 shadow-[0_0_15px_rgba(245,158,11,0.18)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
               }`}
             >
               <span>تاريخ المونديال</span>
@@ -116,10 +279,10 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab("teams")}
-              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer h-11 select-none ${
+              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-95 ${
                 activeTab === "teams"
-                  ? "bg-slate-900 text-white border border-slate-850"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-sky-400 border border-sky-500/45 shadow-[0_0_15px_rgba(14,165,233,0.18)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
               }`}
             >
               <span>المنتخبات والنجوم</span>
@@ -128,10 +291,10 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab("stadiums")}
-              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer h-11 select-none ${
+              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-95 ${
                 activeTab === "stadiums"
-                  ? "bg-slate-900 text-white border border-slate-850"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-emerald-400 border border-emerald-500/45 shadow-[0_0_15px_rgba(16,185,129,0.18)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
               }`}
             >
               <span>دليل الملاعب</span>
@@ -140,25 +303,25 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab("ai")}
-              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer h-11 select-none ${
+              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-95 ${
                 activeTab === "ai"
-                  ? "bg-teal-600 text-white shadow-lg shadow-teal-500/10 border border-teal-500/20"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-teal-600 text-white shadow-[0_0_15px_rgba(20,184,166,0.25)] border border-teal-400/50"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
               }`}
             >
               <span className="flex items-center gap-1">
                 <span>خبير المونديال الذكي</span>
-                <span className="text-[9px] bg-white/20 px-1 py-0.5 rounded text-white-400 font-bold">AI</span>
+                <span className="text-[9px] bg-white/20 px-1 py-0.5 rounded text-white font-bold">AI</span>
               </span>
               <Sparkles className="w-4.5 h-4.5" />
             </button>
 
             <button
               onClick={() => setActiveTab("simulator")}
-              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer h-11 select-none ${
+              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-[0.95] ${
                 activeTab === "simulator"
-                  ? "bg-slate-900 text-white border border-slate-850"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-indigo-400 border border-indigo-500/45 shadow-[0_0_15px_rgba(99,102,241,0.18)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
               }`}
             >
               <span>محاكاة المباريات</span>
@@ -167,10 +330,10 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab("dashboard")}
-              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer h-11 select-none ${
+              className={`px-4.5 py-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-out flex items-center gap-2 cursor-pointer h-11 select-none transform hover:scale-[1.03] active:scale-95 ${
                 activeTab === "dashboard"
-                  ? "bg-slate-900 text-white border border-slate-850"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-slate-100 border border-slate-700/60 shadow-[0_0_15px_rgba(255,255,255,0.08)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
               }`}
             >
               <span>الرئيسية والمجموعات</span>
@@ -188,6 +351,104 @@ export default function App() {
         
         {activeTab === "dashboard" && (
           <div className="space-y-12 animate-fade-in" id="dashboard-tab">
+
+            {/* 👑 PREMIUM SUBSCRIPTION STRIPE PROMO BLOCK */}
+            <div className="bg-gradient-to-r from-amber-950/45 via-slate-900 to-slate-950 border border-amber-500/25 rounded-3xl p-6 relative overflow-hidden shadow-xl text-right">
+              {/* Decorative dynamic gold glow */}
+              <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
+              
+              <div className="flex flex-col lg:flex-row-reverse justify-between items-center gap-6">
+                
+                {/* Visual Gold badge and feature stats */}
+                <div className="w-full lg:w-1/3 flex flex-col items-center lg:items-end justify-center">
+                  <div className="relative group mb-3">
+                    <div className="absolute inset-0 bg-amber-500/10 rounded-full blur-md group-hover:blur-lg transition-all animate-pulse"></div>
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-600 to-yellow-350 p-0.5 flex items-center justify-center relative">
+                      <Trophy className="w-9 h-9 text-amber-400" />
+                    </div>
+                  </div>
+                  
+                  <div className="text-center lg:text-right">
+                    <h3 className="text-lg font-bold text-amber-400">العضوية الذهبية الأسطورية 👑</h3>
+                    <p className="text-[11px] text-slate-400 mt-1 font-sans">بوابة دفع Stripe مشفرة بـ SSL بالكامل 🔒</p>
+                  </div>
+                  
+                  {/* Stripe Active Indicator Badge */}
+                  <div className="mt-3 flex items-center gap-2 bg-slate-900/80 px-3 py-1 rounded-full border border-slate-800">
+                    <span className={`w-2 h-2 rounded-full ${stripeActive ? "bg-emerald-500 animate-pulse" : "bg-yellow-500"}`}></span>
+                    <span className="text-[10px] text-slate-300 font-sans">
+                      {stripeActive ? "بوابة Stripe: نشطة ومباشرة 🟢" : "بوابة Stripe: وضع المحاكاة الذكي ⚙️"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Main dynamic premium pitch info */}
+                <div className="flex-1 text-center lg:text-right space-y-4">
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-1.5 bg-amber-400/10 text-amber-400 text-[10px] uppercase font-bold py-0.5 px-3 rounded-full border border-amber-400/15">
+                      <span>عرض خاص بمناسبة المونديال 🏆</span>
+                      <Sparkles className="w-3 h-3" />
+                    </div>
+                    <h2 className="text-2xl font-black text-white">ابدأ رحلتك الفاخرة مع العضوية الذهبية!</h2>
+                    <p className="text-slate-300 text-xs leading-relaxed max-w-2xl font-sans">
+                      انضم لنخبة المشجعين والخبراء الرياضيين، وافتح ميزات التوقع الذكي للأبطال، وتصفح إحصائيات المباريات الحصرية دقيقة بدقيقة، ومساعدة الذكاء الاصطناعي الأسرع مع شارة التاج الذهبي الأنيقة 👑.
+                    </p>
+                  </div>
+
+                  {/* Status Banner inside promotional pitch */}
+                  {stripeStatusMsg && (
+                    <div className="bg-amber-500/15 border border-amber-500/35 p-3 rounded-xl text-amber-300 text-xs font-semibold font-sans animate-pulse">
+                      {stripeStatusMsg}
+                    </div>
+                  )}
+
+                  {currentUser?.isPremium ? (
+                    <div className="bg-emerald-950/30 border border-emerald-500/30 p-4 rounded-xl text-right flex items-center gap-3 justify-end">
+                      <div className="text-right">
+                        <span className="bg-emerald-500/10 text-emerald-400 text-[9px] font-bold py-0.5 px-2 rounded font-sans uppercase">عضوية نشطة</span>
+                        <h4 className="text-white font-bold text-sm mt-0.5">تهانينا! اشتراكك بالباقة الذهبية فعال كلياً 🎉</h4>
+                        <p className="text-slate-400 text-[10px] mt-0.5 font-sans">حسابك يتمتع الآن بجميع الصلاحيات الفاخرة وشارات التحليل المتقدمة.</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                        <span className="text-xl">⭐️</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row-reverse items-center justify-center lg:justify-start gap-4 pt-1.5">
+                      {/* Plan 1 Button */}
+                      <button
+                        onClick={() => handleStripeUpgrade("monthly")}
+                        disabled={!!stripeLoading}
+                        className="bg-gradient-to-l from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black px-6 py-3 rounded-xl text-xs transition-transform transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-amber-500/10 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {stripeLoading === "monthly" ? (
+                          <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <span>العضوية الذهبية (شهرية) • $9.99 👑</span>
+                        )}
+                      </button>
+
+                      {/* Plan 2 Button */}
+                      <button
+                        onClick={() => handleStripeUpgrade("yearly")}
+                        disabled={!!stripeLoading}
+                        className="bg-slate-900 hover:bg-slate-850 text-amber-400 font-extrabold px-6 py-3 rounded-xl text-xs transition-transform transform hover:scale-[1.02] active:scale-95 shadow-lg border border-amber-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {stripeLoading === "yearly" ? (
+                          <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <span>باقة التوفير السنوية • $79.99 🏆</span>
+                        )}
+                      </button>
+
+                      <span className="text-[10px] text-slate-400 font-sans">معالجة مشفرة وآمنة بنسبة 100%</span>
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            </div>
             
             {/* 🎥 THE HERO World Cup Final image with descriptive card caption */}
             <div className="relative rounded-3xl overflow-hidden border border-slate-900 shadow-2xl bg-slate-950">
@@ -441,6 +702,8 @@ export default function App() {
         {activeTab === "stadiums" && <StadiumsGuide />}
 
         {activeTab === "teams" && <TeamsList />}
+
+        {activeTab === "workspace" && <WorkspaceHub />}
 
         {activeTab === "support" && (
           <AppSupportHub 

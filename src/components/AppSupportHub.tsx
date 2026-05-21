@@ -109,11 +109,26 @@ export default function AppSupportHub({ currentUser, onUserUpdate }: AppSupportH
 
   // Pledge modal/form state
   const [pledgeAmount, setPledgeAmount] = useState<number>(0);
-  const [pledgeCategoryName, setPledgeCategoryName] = useState<"☕ رعاية قهوة" | "🥉 باقة برونزية" | "🥈 باقة فضية" | "🥇 باقة كابتن ذهبية">("☕ رعاية قهوة");
+  const [pledgeCategoryName, setPledgeCategoryName] = useState<"☕ رعاية قهوة" | "🥉 باقة برونزية" | "🥈 باقة فضية" | "🥇 باقة كابتن ذهبية" | "👑 مستشار النخبة المونديالي" | "🏆 الراعي الماسي الملكي للمونديال">("☕ رعاية قهوة");
   const [pledgeMessage, setPledgeMessage] = useState("");
   const [showPledgeModal, setShowPledgeModal] = useState(false);
   const [isPledgingLoading, setIsPledgingLoading] = useState(false);
   const [pledgeSuccess, setPledgeSuccess] = useState(false);
+
+  // Custom interactive donor parameters for $10 - $50,000 support
+  const [customPledgeValue, setCustomPledgeValue] = useState<number>(250);
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "applepay" | "paypal" | "googlepay" | "cashapp" | "cashappcard" | "cashapppay">("card");
+  const [hoveredMethod, setHoveredMethod] = useState<"card" | "applepay" | "paypal" | "googlepay" | "cashapp" | "cashappcard" | "cashapppay" | null>(null);
+
+  // Dynamically resolve custom support category rank based on donation amount
+  const getDonorCategoryBadge = (val: number): string => {
+    if (val < 50) return "☕ رعاية قهوة";
+    if (val < 250) return "🥉 باقة برونزية";
+    if (val < 1000) return "🥈 باقة فضية";
+    if (val < 5000) return "🥇 باقة كابتن ذهبية";
+    if (val < 20000) return "👑 مستشار النخبة المونديالي";
+    return "🏆 الراعي الماسي الملكي للمونديال";
+  };
 
   // Feedback notifications
   const [feedbackMsg, setFeedbackMsg] = useState("");
@@ -337,17 +352,19 @@ export default function AppSupportHub({ currentUser, onUserUpdate }: AppSupportH
   };
 
   // Pledge Sponsorship Handler
-  const openPledgeModal = (amount: number, category: "☕ رعاية قهوة" | "🥉 باقة برونزية" | "🥈 باقة فضية" | "🥇 باقة كابتن ذهبية") => {
-    setPledgeAmount(amount);
+  const openPledgeModal = (amount: number, category: "☕ رعاية قهوة" | "🥉 باقة برونزية" | "🥈 باقة فضية" | "🥇 باقة كابتن ذهبية" | "👑 مستشار النخبة المونديالي" | "🏆 الراعي الماسي الملكي للمونديال") => {
+    setCustomPledgeValue(amount);
     setPledgeCategoryName(category);
-    setPledgeMessage("");
     setPledgeSuccess(false);
-    setShowPledgeModal(true);
   };
 
   const submitPledge = (e: React.FormEvent) => {
     e.preventDefault();
     setIsPledgingLoading(true);
+    setPledgeSuccess(false);
+
+    const finalAmount = customPledgeValue;
+    const finalCategory = getDonorCategoryBadge(finalAmount);
 
     if (stripeActive) {
       // Connect to real full-stack Stripe Checkout session API
@@ -356,7 +373,7 @@ export default function AppSupportHub({ currentUser, onUserUpdate }: AppSupportH
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           planId: "pledge",
-          amount: pledgeAmount,
+          amount: finalAmount,
           username: currentUser ? currentUser.username : "متبرع مونديالي كريم",
           customMessage: pledgeMessage.trim() || undefined
         })
@@ -381,7 +398,7 @@ export default function AppSupportHub({ currentUser, onUserUpdate }: AppSupportH
       return;
     }
 
-    // Simulate standard credit validation delay
+    // Simulate standard credit/Cash App validation delay
     setTimeout(() => {
       setIsPledgingLoading(false);
       setPledgeSuccess(true);
@@ -390,16 +407,16 @@ export default function AppSupportHub({ currentUser, onUserUpdate }: AppSupportH
       const newPledge: SupportPledge = {
         id: "pledge_" + Math.random().toString(),
         username: sponsorName,
-        amount: pledgeAmount,
-        category: pledgeCategoryName,
+        amount: finalAmount,
+        category: finalCategory as any,
         message: pledgeMessage.trim() || "كل الدعم لتطوير هذا الصرح المحاكاتي الرائع!",
         timestamp: "الآن"
       };
 
       const updatedPledges = [newPledge, ...pledges];
-      const newTotal = totalSupportAmount + pledgeAmount;
+      const newTotal = totalSupportAmount + finalAmount;
       savePledgesToLoc(updatedPledges, newTotal);
-    }, 1800);
+    }, 1850);
   };
 
   // Premium Subscription handlers
@@ -759,40 +776,434 @@ export default function AppSupportHub({ currentUser, onUserUpdate }: AppSupportH
               </div>
             </div>
 
-            {/* Simulated Sponsorship Packages Buttons Grid */}
-            <div className="mt-8 pt-6 border-t border-slate-900 text-right">
-              <span className="text-[11px] text-slate-400 font-black block mb-4">اختر فوزاً واشترِ قهوة للمطورين:</span>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => openPledgeModal(5, "☕ رعاية قهوة")}
-                  className="bg-slate-950 hover:bg-amber-500/10 hover:border-amber-500/20 text-slate-300 hover:text-amber-300 py-2.5 rounded-xl text-[11px] font-bold border border-slate-850 cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1"
-                >
-                  <span className="text-base">☕</span>
-                  <span>رعاية قهوة ($5)</span>
-                </button>
-                <button
-                  onClick={() => openPledgeModal(20, "🥉 باقة برونزية")}
-                  className="bg-slate-950 hover:bg-amber-500/10 hover:border-amber-500/20 text-slate-300 hover:text-amber-300 py-2.5 rounded-xl text-[11px] font-bold border border-slate-850 cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1"
-                >
-                  <span className="text-base">🥉</span>
-                  <span>برونزية ($20)</span>
-                </button>
-                <button
-                  onClick={() => openPledgeModal(50, "🥈 باقة فضية")}
-                  className="bg-slate-950 hover:bg-amber-500/10 hover:border-amber-500/20 text-slate-300 hover:text-amber-300 py-2.5 rounded-xl text-[11px] font-bold border border-slate-850 cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1"
-                >
-                  <span className="text-base">🥈</span>
-                  <span>فضية ($50)</span>
-                </button>
-                <button
-                  onClick={() => openPledgeModal(120, "🥇 باقة كابتن ذهبية")}
-                  className="bg-slate-950 hover:bg-amber-500/10 hover:border-amber-500/20 text-slate-300 hover:text-amber-300 py-2.5 rounded-xl text-[11px] font-bold border border-slate-850 cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1"
-                >
-                  <span className="text-base">🥇</span>
-                  <span>ذهبية ($120)</span>
-                </button>
-              </div>
-            </div>
+            {/* Unified Inline Interactive Support & Payment Portal Form */}
+            <form onSubmit={submitPledge} className="mt-8 pt-6 border-t border-slate-900 text-right space-y-6">
+              
+              {pledgeSuccess ? (
+                /* Celebration and thank you notice shown directly on the page interface */
+                <div className="bg-gradient-to-tr from-emerald-950/40 via-slate-950 to-emerald-950/20 border border-emerald-500/30 rounded-2xl p-6 text-center space-y-4 animate-fade-in">
+                  <div className="text-4xl animate-bounce">☕🎉🟢💖</div>
+                  <h4 className="text-sm font-black text-emerald-400 font-sans">شكراً لشهامتك ودعمك المالي الأسطوري!</h4>
+                  <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                    تم استلام وتأكيد معاملة الرعاية بنجاح بقيمة <strong className="text-emerald-400 font-mono text-lg">${customPledgeValue.toLocaleString("en-US")}</strong> عبر <strong className="text-slate-200">
+                      {paymentMethod === "card" && "💳 بطاقة الائتمان"}
+                      {paymentMethod === "applepay" && "🍏 Apple Pay"}
+                      {paymentMethod === "googlepay" && "🤖 Google Pay"}
+                      {paymentMethod === "paypal" && "🌀 PayPal"}
+                      {paymentMethod === "cashapp" && "🟢 Cash App Card / Pay"}
+                      {paymentMethod === "cashappcard" && "🟢 بطاقة Cash App Card الخضراء"}
+                      {paymentMethod === "cashapppay" && "🟢 Cash App Pay الدفع السريع"}
+                    </strong>.
+                  </p>
+                  <p className="text-[10px] text-slate-400 leading-normal font-sans">
+                    تم تسجيل اسمك ورسالتك تلقائياً في جدول الشرف الرياضي بالجانب الأيسر برتبة <strong className="text-amber-400 font-sans">{getDonorCategoryBadge(customPledgeValue)}</strong>!
+                  </p>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPledgeSuccess(false);
+                      setPledgeMessage("");
+                    }}
+                    className="w-full py-2.5 bg-slate-905 hover:bg-slate-900 text-emerald-400 font-bold text-xs rounded-xl border border-emerald-500/20 transition-all cursor-pointer"
+                  >
+                    تقديم دعم إضافي أو مخصص 💖
+                  </button>
+                </div>
+              ) : (
+                /* Active Interactive Form */
+                <>
+                  {/* Preset Quick Packages */}
+                  <div className="space-y-3">
+                    <span className="text-[11px] text-slate-400 font-black block">⚡ باقات الدعم السريع المحددة مسبقاً (انقر لتحديد المبلغ فوراً):</span>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomPledgeValue(5);
+                          setPaymentMethod("card");
+                        }}
+                        className={`py-2.5 rounded-xl text-[11px] font-bold border cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1 group ${
+                          customPledgeValue === 5 
+                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300" 
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300 hover:border-slate-850"
+                        }`}
+                      >
+                        <span className="text-base group-hover:scale-110 transition-transform">☕</span>
+                        <span>رعاية قهوة ($5)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomPledgeValue(20);
+                          setPaymentMethod("card");
+                        }}
+                        className={`py-2.5 rounded-xl text-[11px] font-bold border cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1 group ${
+                          customPledgeValue === 20 
+                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300" 
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300 hover:border-slate-850"
+                        }`}
+                      >
+                        <span className="text-base group-hover:scale-110 transition-transform">🥉</span>
+                        <span>برونزية ($20)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomPledgeValue(50);
+                          setPaymentMethod("card");
+                        }}
+                        className={`py-2.5 rounded-xl text-[11px] font-bold border cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1 group ${
+                          customPledgeValue === 50 
+                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300" 
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300 hover:border-slate-850"
+                        }`}
+                      >
+                        <span className="text-base group-hover:scale-110 transition-transform">🥈</span>
+                        <span>فضية ($50)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomPledgeValue(120);
+                          setPaymentMethod("card");
+                        }}
+                        className={`py-2.5 rounded-xl text-[11px] font-bold border cursor-pointer text-center select-none transition-all flex flex-col items-center justify-center gap-1 group ${
+                          customPledgeValue === 120 
+                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300" 
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300 hover:border-slate-850"
+                        }`}
+                      >
+                        <span className="text-base group-hover:scale-110 transition-transform">🥇</span>
+                        <span>ذهبية ($120)</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-4 pt-1" id="inline-payment-selector">
+                    <span className="text-[11px] text-slate-400 font-black block">🛡️ اختر بوابة المعالجة وطريقة الدفع المفضلة لديك:</span>
+                    
+                    {/* Responsive adaptive grid layout for payment methods */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      
+                      {/* Option 1: Cash App Pay (STUNNING EMERALD FOCUS) */}
+                      <button
+                        type="button"
+                        onMouseEnter={() => setHoveredMethod("cashapppay")}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        onClick={() => setPaymentMethod("cashapppay")}
+                        className={`p-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-between transition-all cursor-pointer text-right group ${
+                          paymentMethod === "cashapppay"
+                            ? "bg-emerald-950/40 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)] font-black scale-[1.01]"
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300 hover:border-slate-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[8px] bg-emerald-500 text-slate-950 px-1.5 py-0.5 rounded font-black font-sans leading-none">نشط 🟢</span>
+                          <span className="text-sm group-hover:rotate-12 transition-transform">🟢</span>
+                        </div>
+                        <div className="truncate pr-1">
+                          <span className="block font-sans font-black text-white text-[11px] sm:text-xs">Cash App Pay السريع</span>
+                          <span className="block text-[8px] text-slate-500 font-normal truncate">سداد سريع بالرمز أو الـ Cashtag</span>
+                        </div>
+                      </button>
+
+                      {/* Option 2: Cash App Card (STUNNING EMERALD FOCUS) */}
+                      <button
+                        type="button"
+                        onMouseEnter={() => setHoveredMethod("cashappcard")}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        onClick={() => setPaymentMethod("cashappcard")}
+                        className={`p-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-between transition-all cursor-pointer text-right group ${
+                          paymentMethod === "cashappcard"
+                            ? "bg-emerald-950/40 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)] font-black scale-[1.01]"
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300 hover:border-slate-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-black font-sans leading-none">بطاقة 💳</span>
+                          <span className="text-sm group-hover:scale-110 transition-transform">💳</span>
+                        </div>
+                        <div className="truncate pr-1">
+                          <span className="block font-sans font-black text-white text-[11px] sm:text-xs">بطاقة Cash App Card الخضراء</span>
+                          <span className="block text-[8px] text-slate-500 font-normal truncate">ادفع برصيد بطاقة الكاش آبل الخضراء</span>
+                        </div>
+                      </button>
+
+                      {/* Option 3: Credit Cards */}
+                      <button
+                        type="button"
+                        onMouseEnter={() => setHoveredMethod("card")}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        onClick={() => setPaymentMethod("card")}
+                        className={`p-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-between transition-all cursor-pointer text-right group ${
+                          paymentMethod === "card"
+                            ? "bg-rose-950/20 border-rose-500/40 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.12)] font-black scale-[1.01]"
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300"
+                        }`}
+                      >
+                        <span className="text-sm group-hover:scale-110 transition-transform">💳</span>
+                        <div className="truncate pr-1">
+                          <span className="block font-sans text-white text-[11px] sm:text-xs">بطاقة ائتمانية عالمية</span>
+                          <span className="block text-[8px] text-slate-500 font-mono font-normal truncate">Visa, Mastercard, Amex</span>
+                        </div>
+                      </button>
+
+                      {/* Option 4: Apple Pay */}
+                      <button
+                        type="button"
+                        onMouseEnter={() => setHoveredMethod("applepay")}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        onClick={() => setPaymentMethod("applepay")}
+                        className={`p-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-between transition-all cursor-pointer text-right group ${
+                          paymentMethod === "applepay"
+                            ? "bg-rose-950/20 border-rose-500/40 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.12)] font-black scale-[1.01]"
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300"
+                        }`}
+                      >
+                        <span className="text-sm group-hover:scale-110 transition-transform">🍏</span>
+                        <div className="truncate pr-1">
+                          <span className="block font-sans text-white text-[11px] sm:text-xs">بوابة Apple Pay السريعة</span>
+                          <span className="block text-[8px] text-slate-500 font-normal truncate">تفويض سريع عبر iOS/Mac بنقرة واحدة</span>
+                        </div>
+                      </button>
+
+                      {/* Option 5: Google Pay */}
+                      <button
+                        type="button"
+                        onMouseEnter={() => setHoveredMethod("googlepay")}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        onClick={() => setPaymentMethod("googlepay")}
+                        className={`p-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-between transition-all cursor-pointer text-right group ${
+                          paymentMethod === "googlepay"
+                            ? "bg-rose-950/20 border-rose-500/40 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.12)] font-black scale-[1.01]"
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300"
+                        }`}
+                      >
+                        <span className="text-sm group-hover:scale-110 transition-transform">🤖</span>
+                        <div className="truncate pr-1">
+                          <span className="block font-sans text-white text-[11px] sm:text-xs">Google Pay الفوري</span>
+                          <span className="block text-[8px] text-slate-500 font-normal truncate">سداد سريع من الكروم وأندرويد</span>
+                        </div>
+                      </button>
+
+                      {/* Option 6: PayPal */}
+                      <button
+                        type="button"
+                        onMouseEnter={() => setHoveredMethod("paypal")}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        onClick={() => setPaymentMethod("paypal")}
+                        className={`p-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-between transition-all cursor-pointer text-right group ${
+                          paymentMethod === "paypal"
+                            ? "bg-rose-950/20 border-rose-500/40 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.12)] font-black scale-[1.01]"
+                            : "bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-300"
+                        }`}
+                      >
+                        <span className="text-sm group-hover:scale-110 transition-transform">🌀</span>
+                        <div className="truncate pr-1">
+                          <span className="block font-sans text-white text-[11px] sm:text-xs">حساب PayPal الإلكتروني</span>
+                          <span className="block text-[8px] text-slate-500 font-mono font-normal truncate">رصيد أو حساب PayPal البنكي</span>
+                        </div>
+                      </button>
+
+                    </div>
+
+                    {/* Highly Interactive dynamic explanatory hints/tooltips box for all ways */}
+                    {(hoveredMethod || paymentMethod) && (
+                      <div className="bg-slate-950/90 border border-slate-850 p-3.5 rounded-2xl space-y-2 animate-fade-in text-right shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+                        <div className="flex items-center justify-between border-b border-slate-900 pb-1.5">
+                          <span className="text-[9px] bg-rose-500/10 text-rose-450 px-2 py-0.5 rounded border border-rose-500/15 font-black uppercase tracking-wider">
+                            {hoveredMethod ? "💡 تلميح استرشادي سريع" : "🔍 تفاصيل طريقة الدفع الحالية"}
+                          </span>
+                          <span className="text-xs font-black text-rose-300">
+                            {(() => {
+                              const method = hoveredMethod || paymentMethod;
+                              if (method === "cashapppay") return "🟢 الدفع الفوري Cash App Pay";
+                              if (method === "cashappcard") return "🟢 بطاقة Cash App Card الخضراء";
+                              if (method === "cashapp") return "🟢 Cash App متكامل ومحسّن";
+                              if (method === "card") return "💳 بطاقات الائتمان العالمية";
+                              if (method === "applepay") return "🍏 Apple Pay بنقرة واحدة";
+                              if (method === "googlepay") return "🤖 محفظة Google Pay الذكية";
+                              return "🌀 بوابة PayPal السريعة";
+                            })()}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-relaxed font-sans mt-1">
+                          {(() => {
+                            const method = hoveredMethod || paymentMethod;
+                            if (method === "cashapppay") return "بوابة دفع فورية ومباشرة. تتيح لك تفويض الدعم الفوري مباشرة بمسح رمز الاستجابة السريعة (QR) الخاص بتطبيق كاش آب أو تسجيل الدخول باسم الكاش تاج ($Cashtag) الفريد بك لبدء النقل المباشر.";
+                            if (method === "cashappcard") return "استخدم رصيد حسابك بطريقة تقليدية وبأعلى مستويات الأمان. تتيح لك إدخال تفاصيل بطاقة الصراف الخضراء (Cash Card) ومعالجتها كبطاقة فيزا فورية بنظام تشفر مالي معقد.";
+                            if (method === "cashapp") return "بوابة تواصل كاش آب الدفع السريعة الشاملة لبطاقات الخصم ومعالجة رصيد الكاش بشكل فوري وآمن.";
+                            if (method === "card") return "تقبل جميع بطاقات الفيزا والماستركارد والبطاقات العالمية ببروتوكولات حماية ثلاثية الأبعاد (3D Secure) لضمان أمان أموالك وبياناتك الشخصية دون الكشف عنها للعلن.";
+                            if (method === "applepay") return "الخدمة الأحدث والأسرع من Apple لتفويض المعاملة في ثوانٍ باستخدام معرف الوجه أو البصمة المسجلة بهاتفك أو حاسوبك الشخصي دون الحاجة لكتابة أية أرقام بنكية يدوياً في المتصفح.";
+                            if (method === "googlepay") return "ادفع بأمان عبر Google Pay المدمج بمتصفحك. تتيح لك سحباً سريعاً وبنقرة واحدة فقط لضمان سلامة التعامل وبدون تخزين تفاصيل بطاقتك خارجيًا.";
+                            return "بوابة PayPal الفورية والآمنة عالمياً. تتيح لك الدفع من رصيدك مباشرة، أو باستخدام بطاقاتك المفضلة والحسابات المصرفية الملحقة بنقرة توجيه خاطفة وسرية للغاية.";
+                          })()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Interactive Dynamic Inline Gateway Input fields depending on paymentMethod */}
+                  <div className="bg-slate-950/90 border border-slate-900 rounded-2xl p-4.5 space-y-3">
+                    <div className="text-[9px] text-slate-400 uppercase font-black tracking-wider flex items-center justify-between border-b border-slate-900 pb-2">
+                      <span>{stripeActive ? "🔒 بوابة Stripe مشفرة وآمنة" : "⚙️ محاكاة التحويل المالي الفوري والمشفر"}</span>
+                      <span className="text-emerald-400 font-sans font-bold">
+                        {paymentMethod === "card" && "💳 بطاقة ائتمان"}
+                        {paymentMethod === "applepay" && "🍏 Apple Pay الترددي"}
+                        {paymentMethod === "googlepay" && "🤖 Google Pay"}
+                        {paymentMethod === "paypal" && "🌀 PayPal"}
+                        {paymentMethod === "cashapppay" && "🟢 Cash App Pay السريع"}
+                        {paymentMethod === "cashappcard" && "💳 بطاقة Cash App Card الخضراء"}
+                      </span>
+                    </div>
+
+                    {/* Cash App Pay input fields (Cashtag focus) */}
+                    {paymentMethod === "cashapppay" && (
+                      <div className="space-y-3.5 animate-fade-in py-2">
+                        <div className="flex items-center gap-3.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-3">
+                          <span className="text-2xl animate-pulse">🟢</span>
+                          <div className="text-right">
+                            <span className="text-[11px] font-black text-emerald-400 block font-sans">بوابة Cash App Pay الفورية</span>
+                            <span className="text-[9.5px] text-slate-400 font-sans">سيتم تحويل الدعم فورا من حساب Cash App الخاص بك بعد التحقق من الـ Cashtag</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-[10px] text-slate-300 font-sans">أدخل اسم الكاش تاج الخاص بك (Cashtag):</label>
+                          <div className="direction-ltr block relative">
+                            <span className="absolute left-3.5 top-2.5 text-emerald-400 font-bold font-mono text-sm">$</span>
+                            <input
+                              type="text"
+                              placeholder="cashtag"
+                              required
+                              className="w-full pl-8 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-emerald-400 text-left text-xs font-mono font-bold focus:outline-none focus:border-emerald-500 transition-all placeholder:text-slate-700"
+                            />
+                          </div>
+                          <p className="text-[8.5px] text-slate-500 font-sans mt-1">مثال: $worldcupfan26. سيتم خصم المبلغ وتوثيق مساهمتك تلقائياً.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cash App Card input fields (Green Card focus) */}
+                    {paymentMethod === "cashappcard" && (
+                      <div className="space-y-3.5 animate-fade-in py-2">
+                        <div className="flex items-center gap-3.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-3">
+                          <span className="text-2xl">💳</span>
+                          <div className="text-right">
+                            <span className="text-[11px] font-black text-emerald-400 block font-sans">بطاقة Cash App Card الخضراء</span>
+                            <span className="text-[9.5px] text-slate-400 font-sans">ادخل بيانات بطاقة الخصم الخضراء الصادرة لك من تطبيق Cash App</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          <label className="block text-[10px] text-slate-350 font-sans">تفاصيل بطاقة الكاش كارد:</label>
+                          <div className="grid grid-cols-1 gap-2">
+                            <input
+                              type="text"
+                              placeholder="رقم بطاقة Cash Card (4000 1234 5678 9010)"
+                              required
+                              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-left focus:outline-none focus:border-emerald-500 transition-all"
+                            />
+                            <div className="grid grid-cols-2 gap-3">
+                              <input
+                                type="text"
+                                maxLength={3}
+                                placeholder="CVV الكود"
+                                required
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-center focus:outline-none focus:border-emerald-500"
+                              />
+                              <input
+                                placeholder="MM/YY"
+                                required
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-center focus:outline-none focus:border-emerald-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === "card" && (
+                      <div className="space-y-3 animate-fade-in">
+                        <div className="text-[10px] text-slate-400 font-sans">معالجة البطاقات الائتمانية العالمية المشفرة:</div>
+                        <input
+                          type="text"
+                          placeholder="رقم بطاقتك الائتمانية"
+                          required
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-left focus:outline-none focus:border-rose-500"
+                        />
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="text"
+                            maxLength={3}
+                            placeholder="CVV"
+                            required
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-center focus:outline-none focus:border-rose-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder="MM/YY"
+                            required
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-center focus:outline-none focus:border-rose-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === "applepay" && (
+                      <div className="text-center py-3 space-y-2 animate-fade-in">
+                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center mx-auto text-lg">🍏</div>
+                        <h4 className="text-xs font-bold text-white">Apple Pay جاهز</h4>
+                        <p className="text-[9px] text-slate-500 max-w-xs mx-auto leading-relaxed">
+                          انقر نقراً مزدوجاً بـ Face ID لتأكيد التفويض والدفع الآمن.
+                        </p>
+                      </div>
+                    )}
+
+                    {paymentMethod === "googlepay" && (
+                      <div className="text-center py-3 space-y-2 animate-fade-in">
+                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center mx-auto text-lg text-emerald-400">🤖</div>
+                        <h4 className="text-xs font-bold text-white">Google Pay جاهز</h4>
+                        <p className="text-[9px] text-slate-500 max-w-xs mx-auto leading-relaxed">
+                          سيتم سحب الرصيد من بطاقتك الملحقة آلياً عبر محفظة جوجل.
+                        </p>
+                      </div>
+                    )}
+
+                    {paymentMethod === "paypal" && (
+                      <div className="text-center py-3 space-y-2 animate-fade-in">
+                        <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center mx-auto text-lg text-sky-400">🌀</div>
+                        <h4 className="text-xs font-bold text-white">PayPal بوابتك جاهزة</h4>
+                        <p className="text-[9px] text-slate-500 max-w-xs mx-auto leading-relaxed font-sans">
+                          إتمام الدعم بضغطة زر وتأكيد بروتوكول PayPal الفوري.
+                        </p>
+                      </div>
+                    )}
+
+                  </div>
+
+                  {/* Action custom submit button directly in the main interface */}
+                  <button
+                    type="submit"
+                    disabled={isPledgingLoading}
+                    className="w-full bg-gradient-to-l from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:from-slate-800 disabled:to-slate-850 text-white font-black py-3.5 px-6 rounded-2xl text-[12px] transition-transform transform hover:scale-[1.01] active:scale-95 shadow-lg shadow-emerald-950/20 flex items-center justify-center gap-2 cursor-pointer select-none"
+                  >
+                    {isPledgingLoading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>جاري التحقق الفوري ومعالجة الدعم...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <span>إتمام وتأكيد دفع الدعم بقيمة ${customPledgeValue.toLocaleString("en-US")} 🚀</span>
+                        <Sparkles className="w-4 h-4 animate-pulse text-yellow-350" />
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+
+            </form>
 
           </div>
 
@@ -1106,39 +1517,101 @@ export default function AppSupportHub({ currentUser, onUserUpdate }: AppSupportH
                     />
                   </div>
 
-                  {/* Mock Credit credentials form elements to look stunning */}
-                  <div className="bg-slate-950/80 border border-slate-900 rounded-2xl p-4 space-y-3">
-                    <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-1">
-                      🔐 محاكاة بوابة المدفوعات الآمنة (تجريبية تماماً)
+                  {/* Interactive Dynamic Gateway Simulation depending on paymentMethod */}
+                  <div className="bg-slate-950/90 border border-slate-900 rounded-2xl p-4 space-y-3">
+                    <div className="text-[9px] text-slate-400 uppercase font-black tracking-wider flex items-center justify-between border-b border-slate-900 pb-1.5">
+                      <span>{stripeActive ? "🔒 بوابة STRIPE الآمنة والنشطة" : "⚙️ محاكاة الدفع المشفر الحية"}</span>
+                      <span className="text-amber-400 font-sans">
+                        {paymentMethod === "card" && "💳 بطاقة ائتمان"}
+                        {paymentMethod === "applepay" && "🍏 Apple Pay"}
+                        {paymentMethod === "googlepay" && "🤖 Google Pay"}
+                        {paymentMethod === "paypal" && "🌀 PayPal"}
+                        {paymentMethod === "cashapp" && "🟢 Cash App Pay / Card"}
+                      </span>
                     </div>
-                    
-                    <div>
-                      <input
-                        type="text"
-                        disabled
-                        value="4000 •••• •••• 9026"
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-850 rounded-xl text-slate-500 text-xs font-mono text-left"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <input
-                          type="text"
-                          disabled
-                          value="CVV: 554"
-                          className="w-full px-3 py-2 bg-slate-900 border border-slate-850 rounded-xl text-slate-500 text-xs font-mono text-center"
-                        />
+
+                    {paymentMethod === "card" && (
+                      <div className="space-y-3 animate-fade-in">
+                        <div className="text-[10px] text-slate-400 leading-normal font-sans">
+                          إدخال تفاصيل البطاقة المشفر بـ 256 بت SSL:
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            placeholder="رقم البطاقة (مثال: 4000 1234 5678 9010)"
+                            required
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-left focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <input
+                              type="text"
+                              maxLength={3}
+                              placeholder="CVV"
+                              required
+                              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-center focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              placeholder="MM/YY"
+                              required
+                              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-xs font-mono text-center focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <input
-                          type="text"
-                          disabled
-                          value="EXP: 12/29"
-                          className="w-full px-3 py-2 bg-slate-900 border border-slate-850 rounded-xl text-slate-500 text-xs font-mono text-center"
-                        />
+                    )}
+
+                    {paymentMethod === "applepay" && (
+                      <div className="text-center py-4 space-y-2.5 animate-fade-in">
+                        <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center mx-auto text-xl">🍏</div>
+                        <h4 className="text-xs font-bold text-white font-sans">جاهز للدفع بلمسة بنقر مزدوج</h4>
+                        <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-normal font-sans">
+                          يرجى تأكيد بصمة الوجه (Face ID) أو بصمة الإصبع (Touch ID) بجهاز iPhone / Mac الخاص بك لبدء عملية التفويض السريع عبر Apple Pay.
+                        </p>
                       </div>
-                    </div>
+                    )}
+
+                    {paymentMethod === "googlepay" && (
+                      <div className="text-center py-4 space-y-2.5 animate-fade-in">
+                        <div className="w-12 h-12 rounded-full bg-sky-500/10 flex items-center justify-center mx-auto text-xl">🤖</div>
+                        <h4 className="text-xs font-bold text-white font-sans">Google Pay محاذاة تلقائية</h4>
+                        <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-normal font-sans">
+                          بوابة الدفع التلقائي متزامنة مع حساب Google النشط بجهازك. اضغط على الزر أدناه لإتمام النقر السريع بمحاذاة أندرويد.
+                        </p>
+                      </div>
+                    )}
+
+                    {paymentMethod === "paypal" && (
+                      <div className="text-center py-4 space-y-2.5 animate-fade-in">
+                        <div className="w-12 h-12 rounded-full bg-blue-600/10 flex items-center justify-center mx-auto text-xl">🌀</div>
+                        <h4 className="text-xs font-bold text-white font-sans">توجيه PayPal المشفر</h4>
+                        <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-normal font-sans">
+                          بوابة تمهيد PayPal ستفتح نافذة فرعية مشفرة لتسجيل رصيدك بـ PayPal. سيتم خصم وإيداع التبرع بسلاسة فورية.
+                        </p>
+                      </div>
+                    )}
+
+                    {paymentMethod === "cashapp" && (
+                      <div className="space-y-3 animate-fade-in text-center py-3">
+                        <div className="w-12 h-12 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center mx-auto text-xl font-bold font-mono">$</div>
+                        <h4 className="text-xs font-bold text-white font-sans">Cash App Pay / Cash Card</h4>
+                        <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-normal font-sans">
+                          الدفع الفوري المدعوم ببطاقات كاش آب أو عبر مسح الرمز المباشر. أدخل اسم معرف الكاش للتحقق الفوري والسداد الآمن:
+                        </p>
+                        <div className="direction-ltr">
+                          <input
+                            type="text"
+                            placeholder="$cashtag (اسم معرف الكاش الخاص بك)"
+                            required
+                            className="w-full px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-emerald-400 text-center text-xs font-mono font-bold focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
